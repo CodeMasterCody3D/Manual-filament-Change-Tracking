@@ -43,10 +43,7 @@ Why This Is Useful
 
 I built this for my Ender 3 Pro so I can do multi-color prints without worrying about what color comes next. Works great on my mini HP computer running Klipper instead of a Raspberry Pi! 
 
-If you find a way to get $HOME working in #3dprinting​ #3dprinteverything​ #3dprintlife​ stead of hardcoded paths, let me know! 
+If you find a way to get $HOME working in​stead of hardcoded paths, let me know! 
 
-Subscribe for more Klipper mods & 3D printing tips!
+​
 
-   / a6m2cxqrbf  ​
-
-#orcaslicer​ #3dprintingcommunity​ #android​
