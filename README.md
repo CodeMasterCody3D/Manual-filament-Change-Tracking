@@ -38,7 +38,7 @@ cd Manual-filament-Change-Tracking
 
 3. Replace Hardcoded Username
 
-This repository uses cody as a placeholder. Run the provided script to replace all occurrences of cody with your username:
+This repository uses cody as a placeholder. Run the provided script to replace all occurrences of cody with your username--(HINT:VERY COMMONLY THE USERNAME IS ( pi ) IF YOUR RUNNING ON A RASPBERRY PI):
 
 ```sh
 chmod +x replace_username.sh
