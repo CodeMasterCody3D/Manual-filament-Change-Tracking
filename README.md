@@ -24,7 +24,13 @@ Ensure Klipper is installed.
 KIAUH (Klipper Installation And Update Helper):
 Install the Shell Command Add-on via KIAUH if it's not already installed.
 
-You will need to fix your z offset after installing because it places the shell command activation under the z offset. Just move it above the z offset section. 
+Install jq
+
+```sh
+sudo apt-get install jq
+```
+
+##You will need to fix your z offset after installing because it places the shell command activation under the z offset. Just move it above the z offset section. 
 
 
 2. Download the Repository
