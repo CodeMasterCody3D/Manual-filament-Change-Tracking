@@ -37,7 +37,7 @@ info() {
 }
 
 warn() {
-    echo -e "${YELLOW}[WARN]${NC} $*"
+    echo -e "${YELLOW}[WARN]${NC} $*" >&2
 }
 
 error() {
@@ -161,13 +161,13 @@ validate_install_dir() {
     
     # Create directory if it doesn't exist
     if [ ! -d "$dir" ]; then
-        info "Directory $dir does not exist."
+        echo -e "${GREEN}[INFO]${NC} Directory $dir does not exist." >&2
         if confirm "Create it?"; then
             if ! mkdir -p "$dir"; then
                 error "Failed to create directory $dir"
                 exit 1
             fi
-            info "Created directory $dir"
+            echo -e "${GREEN}[INFO]${NC} Created directory $dir" >&2
         else
             error "Installation cancelled"
             exit 1
