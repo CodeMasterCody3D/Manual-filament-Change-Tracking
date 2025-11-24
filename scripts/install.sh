@@ -197,7 +197,7 @@ select_printer_dir() {
     
     if [ ${#candidates[@]} -eq 0 ]; then
         error "No printer directories detected in $target_home"
-        error "[HINT] Do not run this installer as root. Is Klipper installed and configured? If you are using a manual/custom setup, install the scripts manually into your printer config directory (e.g., $target_home/your_printer/config). Exiting."
+        echo "[HINT] Do not run this installer as root. Is Klipper installed and configured? If you are using a manual/custom setup, install the scripts manually into your printer config directory (e.g., $target_home/your_printer/config). Exiting." >&2
         exit 1
     fi
     
@@ -478,8 +478,20 @@ main() {
             exit 1
         fi
         # Set ownership if running as sudo
+        # We need to set ownership on the newly created directories under TARGET_ROOT
         if [ -n "${SUDO_USER:-}" ]; then
-            chown -R "$real_user:$real_user" "$PRINTER_CONFIG_DIR"
+            # Determine what was created under TARGET_ROOT
+            if [[ "$PRINTER_CONFIG_DIR" == "$TARGET_ROOT"/* ]]; then
+                # PRINTER_CONFIG_DIR is under TARGET_ROOT, chown the first created subdirectory
+                local rel_path="${PRINTER_CONFIG_DIR#$TARGET_ROOT/}"
+                local first_subdir="${rel_path%%/*}"
+                if [ -n "$first_subdir" ] && [ -d "$TARGET_ROOT/$first_subdir" ]; then
+                    chown -R "$real_user:$real_user" "$TARGET_ROOT/$first_subdir"
+                fi
+            elif [ "$PRINTER_CONFIG_DIR" != "$TARGET_ROOT" ]; then
+                # PRINTER_CONFIG_DIR is elsewhere, chown it directly
+                chown -R "$real_user:$real_user" "$PRINTER_CONFIG_DIR"
+            fi
         fi
     fi
     

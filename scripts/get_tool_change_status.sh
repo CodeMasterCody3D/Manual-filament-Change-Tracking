@@ -53,17 +53,20 @@ detect_printer_config_dirs() {
         while IFS= read -r -d '' dir; do
             local basename
             basename=$(basename "$dir")
-            # Add config path if basename starts with "printer" OR directory contains printer_data/config
-            if [[ "$basename" == printer* ]]; then
-                if [ -d "$dir/printer_data/config" ]; then
-                    candidates+=("$dir/printer_data/config")
-                elif [ -d "$dir/config" ]; then
-                    candidates+=("$dir/config")
-                fi
-            elif [ -d "$dir/printer_data/config" ]; then
-                candidates+=("$dir/printer_data/config")
+            local config_path=""
+            
+            # Determine config path based on what exists
+            if [ -d "$dir/printer_data/config" ]; then
+                config_path="$dir/printer_data/config"
             elif [ -d "$dir/config" ]; then
-                candidates+=("$dir/config")
+                config_path="$dir/config"
+            fi
+            
+            # Add if basename starts with "printer" OR we found a config path
+            if [[ "$basename" == printer* ]] || [ -n "$config_path" ]; then
+                if [ -n "$config_path" ]; then
+                    candidates+=("$config_path")
+                fi
             fi
         done < <(find "$target_home" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null || true)
     fi
