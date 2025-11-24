@@ -48,43 +48,24 @@ detect_printer_config_dirs() {
     local target_home="$1"
     local candidates=()
     
-    # Check if $target_home itself contains printer_data/config
-    if [ -d "$target_home/printer_data/config" ]; then
-        candidates+=("$target_home/printer_data/config")
-    fi
-    
-    # Find immediate child directories starting with "printer" that have printer_data/config
+    # Find immediate child directories that contain printer_data/config or config
     if [ -d "$target_home" ]; then
         while IFS= read -r -d '' dir; do
             local basename
             basename=$(basename "$dir")
-            if [[ "$basename" == printer* ]] && [ -d "$dir/printer_data/config" ]; then
+            # Add config path if basename starts with "printer" OR directory contains printer_data/config
+            if [[ "$basename" == printer* ]]; then
+                if [ -d "$dir/printer_data/config" ]; then
+                    candidates+=("$dir/printer_data/config")
+                elif [ -d "$dir/config" ]; then
+                    candidates+=("$dir/config")
+                fi
+            elif [ -d "$dir/printer_data/config" ]; then
                 candidates+=("$dir/printer_data/config")
+            elif [ -d "$dir/config" ]; then
+                candidates+=("$dir/config")
             fi
         done < <(find "$target_home" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null || true)
-        
-        # Also find directories containing printer_data/config (non-printer* names)
-        while IFS= read -r -d '' config_dir; do
-            local parent_dir
-            parent_dir=$(dirname "$(dirname "$config_dir")")
-            if [ "$parent_dir" = "$target_home" ]; then
-                local basename
-                basename=$(basename "$(dirname "$(dirname "$config_dir")")")
-                # Only add if not already in candidates and doesn't start with "printer"
-                if [[ ! "$basename" == printer* ]]; then
-                    local already_added=false
-                    for candidate in "${candidates[@]}"; do
-                        if [ "$candidate" = "$config_dir" ]; then
-                            already_added=true
-                            break
-                        fi
-                    done
-                    if [ "$already_added" = false ]; then
-                        candidates+=("$config_dir")
-                    fi
-                fi
-            fi
-        done < <(find "$target_home" -maxdepth 3 -type d -name "config" -path "*/printer_data/config" -print0 2>/dev/null || true)
     fi
     
     # Return unique candidates
