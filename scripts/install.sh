@@ -3,14 +3,15 @@
 #
 # This script installs the tool change tracking utilities to a chosen directory.
 
-set -e
-set -u
+set -euo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEFAULT_INSTALL_DIR="/usr/local/bin"
 NONINTERACTIVE=false
+PRINTER_CONFIG_DIR=""
+TARGET_ROOT=""
 
 # Files to install
 INSTALL_FILES=(
@@ -42,6 +43,73 @@ warn() {
 
 error() {
     echo -e "${RED}[ERROR]${NC} $*" >&2
+}
+
+# Resolve the real user when running under sudo
+get_real_user() {
+    if [ -n "${SUDO_USER:-}" ]; then
+        echo "$SUDO_USER"
+    else
+        echo "${USER:-$(whoami)}"
+    fi
+}
+
+# Get the home directory of the real user
+get_real_home() {
+    local real_user
+    real_user=$(get_real_user)
+    if [ -n "${SUDO_USER:-}" ]; then
+        # Use getent to get the home directory
+        getent passwd "$real_user" | cut -d: -f6
+    else
+        echo "$HOME"
+    fi
+}
+
+# Detect printer directories in user's home
+detect_printer_dirs() {
+    local target_home="$1"
+    local candidates=()
+    
+    # Check if $target_home itself contains printer_data/config
+    if [ -d "$target_home/printer_data/config" ] || [ -d "$target_home/printer_data" ]; then
+        candidates+=("$target_home")
+    fi
+    
+    # Find immediate child directories starting with "printer"
+    if [ -d "$target_home" ]; then
+        while IFS= read -r -d '' dir; do
+            local basename
+            basename=$(basename "$dir")
+            if [[ "$basename" == printer* ]]; then
+                candidates+=("$dir")
+            fi
+        done < <(find "$target_home" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null || true)
+        
+        # Also find directories containing printer_data/config (non-printer* names)
+        while IFS= read -r -d '' dir; do
+            if [ -d "$dir/printer_data/config" ]; then
+                local basename
+                basename=$(basename "$dir")
+                # Only add if not already in candidates and doesn't start with "printer"
+                if [[ ! "$basename" == printer* ]]; then
+                    local already_added=false
+                    for candidate in "${candidates[@]}"; do
+                        if [ "$candidate" = "$dir" ]; then
+                            already_added=true
+                            break
+                        fi
+                    done
+                    if [ "$already_added" = false ]; then
+                        candidates+=("$dir")
+                    fi
+                fi
+            fi
+        done < <(find "$target_home" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null || true)
+    fi
+    
+    # Return unique candidates
+    printf '%s\n' "${candidates[@]}" | sort -u
 }
 
 # Usage information
@@ -130,6 +198,83 @@ confirm() {
     esac
 }
 
+# Prompt user to select a printer directory
+select_printer_dir() {
+    local target_home="$1"
+    local candidates
+    mapfile -t candidates < <(detect_printer_dirs "$target_home")
+    
+    echo "" >&2
+    echo "=========================================" >&2
+    echo "Select Printer Installation Target" >&2
+    echo "=========================================" >&2
+    echo "" >&2
+    
+    if [ ${#candidates[@]} -eq 0 ]; then
+        info "No existing printer directories detected in $target_home"
+        info "Will create new printer_data directory under $target_home"
+        echo "0) Create new printer_data under $target_home" >&2
+        echo "" >&2
+        
+        if [ "$NONINTERACTIVE" = true ]; then
+            echo "0"
+            return 0
+        fi
+        
+        read -r -p "Press Enter to continue with option 0: " choice
+        echo "0"
+        return 0
+    fi
+    
+    # Display options
+    echo "Detected printer directories:" >&2
+    echo "0) Create new printer_data under $target_home" >&2
+    
+    local i=1
+    for dir in "${candidates[@]}"; do
+        local display_name
+        if [ "$dir" = "$target_home" ]; then
+            display_name="$dir (root)"
+        else
+            display_name="$dir"
+        fi
+        echo "$i) $display_name" >&2
+        i=$((i + 1))
+    done
+    echo "" >&2
+    
+    # Determine default selection
+    local default_choice=1
+    if [ ${#candidates[@]} -gt 0 ]; then
+        default_choice=1
+    else
+        default_choice=0
+    fi
+    
+    if [ "$NONINTERACTIVE" = true ]; then
+        echo "$default_choice"
+        return 0
+    fi
+    
+    # Get user selection
+    local choice
+    read -r -p "Select printer target [$default_choice]: " choice
+    choice=${choice:-$default_choice}
+    
+    # Validate selection
+    if ! [[ "$choice" =~ ^[0-9]+$ ]]; then
+        error "Invalid selection: $choice"
+        exit 1
+    fi
+    
+    if [ "$choice" -lt 0 ] || [ "$choice" -gt ${#candidates[@]} ]; then
+        error "Selection out of range: $choice"
+        exit 1
+    fi
+    
+    echo "$choice"
+}
+
 # Check if we have write permission to install directory
 check_permissions() {
     local dir="$1"
@@ -161,13 +306,13 @@ validate_install_dir() {
     
     # Create directory if it doesn't exist
     if [ ! -d "$dir" ]; then
-        echo -e "${GREEN}[INFO]${NC} Directory $dir does not exist." >&2
+        echo "[INFO] Directory $dir does not exist." >&2
         if confirm "Create it?"; then
             if ! mkdir -p "$dir"; then
                 error "Failed to create directory $dir"
                 exit 1
             fi
-            echo -e "${GREEN}[INFO]${NC} Created directory $dir" >&2
+            echo "[INFO] Created directory $dir" >&2
         else
             error "Installation cancelled"
             exit 1
@@ -231,10 +376,76 @@ main() {
     echo "========================================="
     echo ""
     
-    # Validate and prepare install directory
-    INSTALL_DIR=$(validate_install_dir "$INSTALL_DIR")
+    # Resolve real user and home directory
+    local real_user real_home
+    real_user=$(get_real_user)
+    real_home=$(get_real_home)
     
-    info "Install directory: $INSTALL_DIR"
+    info "Running as user: $real_user"
+    info "Target home: $real_home"
+    echo ""
+    
+    # Determine printer configuration directory
+    if [ -n "${INSTALL_DIR:-}" ] && [ "$INSTALL_DIR" != "$DEFAULT_INSTALL_DIR" ]; then
+        # Check if INSTALL_DIR looks like a printer config dir
+        if [[ "$INSTALL_DIR" == *"/printer_data/config"* ]] || [[ "$INSTALL_DIR" == *"/printer_data"* ]]; then
+            # Use as PRINTER_CONFIG_DIR
+            TARGET_ROOT=$(dirname "$(dirname "$INSTALL_DIR")")
+            PRINTER_CONFIG_DIR="$INSTALL_DIR"
+            if [[ ! "$PRINTER_CONFIG_DIR" == *"/config" ]]; then
+                PRINTER_CONFIG_DIR="$PRINTER_CONFIG_DIR/config"
+            fi
+            info "Using specified printer config directory: $PRINTER_CONFIG_DIR"
+        else
+            # INSTALL_DIR is for wrapper scripts, still need to select printer
+            info "Install directory for wrappers: $INSTALL_DIR"
+        fi
+    fi
+    
+    # If PRINTER_CONFIG_DIR not yet determined, prompt user
+    if [ -z "$PRINTER_CONFIG_DIR" ]; then
+        local selection
+        selection=$(select_printer_dir "$real_home")
+        
+        local candidates
+        mapfile -t candidates < <(detect_printer_dirs "$real_home")
+        
+        if [ "$selection" -eq 0 ]; then
+            # Create new printer_data under home
+            TARGET_ROOT="$real_home"
+            PRINTER_CONFIG_DIR="$real_home/printer_data/config"
+            info "Will create new printer_data at: $TARGET_ROOT"
+        else
+            # Use selected existing directory
+            TARGET_ROOT="${candidates[$((selection - 1))]}"
+            PRINTER_CONFIG_DIR="$TARGET_ROOT/printer_data/config"
+            info "Selected printer: $TARGET_ROOT"
+        fi
+    fi
+    
+    # Ensure PRINTER_CONFIG_DIR exists
+    if [ ! -d "$PRINTER_CONFIG_DIR" ]; then
+        info "Creating printer config directory: $PRINTER_CONFIG_DIR"
+        if ! mkdir -p "$PRINTER_CONFIG_DIR"; then
+            error "Failed to create $PRINTER_CONFIG_DIR"
+            exit 1
+        fi
+        # Set ownership if running as sudo
+        if [ -n "${SUDO_USER:-}" ]; then
+            chown -R "$real_user:$real_user" "$TARGET_ROOT/printer_data"
+        fi
+    fi
+    
+    info "Printer config directory: $PRINTER_CONFIG_DIR"
+    echo ""
+    
+    # Validate and prepare install directory (if different from PRINTER_CONFIG_DIR)
+    if [ -n "${INSTALL_DIR:-}" ] && [ "$INSTALL_DIR" != "$PRINTER_CONFIG_DIR" ]; then
+        INSTALL_DIR=$(validate_install_dir "$INSTALL_DIR")
+        info "Install directory for wrappers: $INSTALL_DIR"
+    else
+        INSTALL_DIR=""
+    fi
     echo ""
     
     # Show what will be installed
