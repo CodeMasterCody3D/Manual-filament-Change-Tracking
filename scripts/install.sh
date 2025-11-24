@@ -119,6 +119,7 @@ detect_printer_dirs() {
     if [ ${#candidates[@]} -gt 0 ]; then
         printf '%s\n' "${candidates[@]}" | sort -u
     fi
+    return 0
 }
 
 # Usage information

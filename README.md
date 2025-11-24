@@ -151,7 +151,7 @@ $PRINTER_CONFIG_DIR/bin/get_tool_change_status.sh
 $PRINTER_CONFIG_DIR/bin/get_tool_change_status.sh --json
 
 # With custom PRINTER_CONFIG_DIR
-PRINTER_CONFIG_DIR=/path/to/config get_tool_change_status.sh
+PRINTER_CONFIG_DIR=/path/to/config $PRINTER_CONFIG_DIR/bin/get_tool_change_status.sh
 ```
 
 Example JSON output:
