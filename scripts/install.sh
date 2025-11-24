@@ -78,39 +78,14 @@ detect_printer_dirs() {
     local target_home="$1"
     local candidates=()
     
-    # Check if $target_home itself contains printer_data/config
-    if [ -d "$target_home/printer_data/config" ] || [ -d "$target_home/printer_data" ]; then
-        candidates+=("$target_home")
-    fi
-    
-    # Find immediate child directories starting with "printer"
+    # Find immediate child directories starting with "printer" OR containing printer_data/config
     if [ -d "$target_home" ]; then
         while IFS= read -r -d '' dir; do
             local basename
             basename=$(basename "$dir")
-            if [[ "$basename" == printer* ]]; then
+            # Add if basename starts with "printer" OR directory contains printer_data/config
+            if [[ "$basename" == printer* ]] || [ -d "$dir/printer_data/config" ]; then
                 candidates+=("$dir")
-            fi
-        done < <(find "$target_home" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null || true)
-        
-        # Also find directories containing printer_data/config (non-printer* names)
-        while IFS= read -r -d '' dir; do
-            if [ -d "$dir/printer_data/config" ]; then
-                local basename
-                basename=$(basename "$dir")
-                # Only add if not already in candidates and doesn't start with "printer"
-                if [[ ! "$basename" == printer* ]]; then
-                    local already_added=false
-                    for candidate in "${candidates[@]}"; do
-                        if [ "$candidate" = "$dir" ]; then
-                            already_added=true
-                            break
-                        fi
-                    done
-                    if [ "$already_added" = false ]; then
-                        candidates+=("$dir")
-                    fi
-                fi
             fi
         done < <(find "$target_home" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null || true)
     fi
@@ -221,45 +196,23 @@ select_printer_dir() {
     echo "" >&2
     
     if [ ${#candidates[@]} -eq 0 ]; then
-        echo "[INFO] No existing printer directories detected in $target_home" >&2
-        echo "[INFO] Will create new printer_data directory under $target_home" >&2
-        echo "0) Create new printer_data under $target_home" >&2
-        echo "" >&2
-        
-        if [ "$NONINTERACTIVE" = true ]; then
-            echo "0"
-            return 0
-        fi
-        
-        read -r -p "Press Enter to continue with option 0: " choice
-        echo "0"
-        return 0
+        error "No printer directories detected in $target_home"
+        echo "[HINT] Do not run this installer as root. Is Klipper installed and configured? If you are using a manual/custom setup, install the scripts manually into your printer config directory (e.g., $target_home/your_printer/config). Exiting." >&2
+        exit 1
     fi
     
-    # Display options
+    # Display options (numbered 1..N)
     echo "Detected printer directories:" >&2
-    echo "0) Create new printer_data under $target_home" >&2
     
     local i=1
     for dir in "${candidates[@]}"; do
-        local display_name
-        if [ "$dir" = "$target_home" ]; then
-            display_name="$dir (root)"
-        else
-            display_name="$dir"
-        fi
-        echo "$i) $display_name" >&2
+        echo "$i) $dir" >&2
         i=$((i + 1))
     done
     echo "" >&2
     
-    # Determine default selection
+    # Default selection is 1
     local default_choice=1
-    if [ ${#candidates[@]} -gt 0 ]; then
-        default_choice=1
-    else
-        default_choice=0
-    fi
     
     if [ "$NONINTERACTIVE" = true ]; then
         echo "$default_choice"
@@ -277,7 +230,7 @@ select_printer_dir() {
         exit 1
     fi
     
-    if [ "$choice" -lt 0 ] || [ "$choice" -gt ${#candidates[@]} ]; then
+    if [ "$choice" -lt 1 ] || [ "$choice" -gt ${#candidates[@]} ]; then
         error "Selection out of range: $choice"
         exit 1
     fi
@@ -500,17 +453,21 @@ main() {
         local candidates
         mapfile -t candidates < <(detect_printer_dirs "$real_home")
         
-        if [ "$selection" -eq 0 ]; then
-            # Create new printer_data under home
-            TARGET_ROOT="$real_home"
-            PRINTER_CONFIG_DIR="$real_home/printer_data/config"
-            info "Will create new printer_data at: $TARGET_ROOT"
+        # Use selected existing directory (selection is 1-based)
+        TARGET_ROOT="${candidates[$((selection - 1))]}"
+        
+        # Determine PRINTER_CONFIG_DIR based on TARGET_ROOT structure
+        if [[ "$TARGET_ROOT" == */printer_data/config ]]; then
+            PRINTER_CONFIG_DIR="$TARGET_ROOT"
+        elif [[ "$TARGET_ROOT" == */config ]]; then
+            PRINTER_CONFIG_DIR="$TARGET_ROOT"
+        elif [[ "$TARGET_ROOT" == */printer_data ]]; then
+            PRINTER_CONFIG_DIR="$TARGET_ROOT/config"
         else
-            # Use selected existing directory
-            TARGET_ROOT="${candidates[$((selection - 1))]}"
-            PRINTER_CONFIG_DIR="$TARGET_ROOT/printer_data/config"
-            info "Selected printer: $TARGET_ROOT"
+            PRINTER_CONFIG_DIR="$TARGET_ROOT/config"
         fi
+        
+        info "Selected printer: $TARGET_ROOT"
     fi
     
     # Ensure PRINTER_CONFIG_DIR exists
@@ -521,8 +478,20 @@ main() {
             exit 1
         fi
         # Set ownership if running as sudo
+        # We need to set ownership on the newly created directories under TARGET_ROOT
         if [ -n "${SUDO_USER:-}" ]; then
-            chown -R "$real_user:$real_user" "$TARGET_ROOT/printer_data"
+            # Determine what was created under TARGET_ROOT
+            if [[ "$PRINTER_CONFIG_DIR" == "$TARGET_ROOT"/* ]]; then
+                # PRINTER_CONFIG_DIR is under TARGET_ROOT, chown the first created subdirectory
+                local rel_path="${PRINTER_CONFIG_DIR#$TARGET_ROOT/}"
+                local first_subdir="${rel_path%%/*}"
+                if [ -n "$first_subdir" ] && [ -d "$TARGET_ROOT/$first_subdir" ]; then
+                    chown -R "$real_user:$real_user" "$TARGET_ROOT/$first_subdir"
+                fi
+            elif [ "$PRINTER_CONFIG_DIR" != "$TARGET_ROOT" ]; then
+                # PRINTER_CONFIG_DIR is elsewhere, chown it directly
+                chown -R "$real_user:$real_user" "$PRINTER_CONFIG_DIR"
+            fi
         fi
     fi
     
