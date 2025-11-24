@@ -7,6 +7,7 @@ import argparse
 import logging
 import tempfile
 import pwd
+import getpass
 from math import sqrt
 
 # Configuration
@@ -14,18 +15,29 @@ HOME = os.path.expanduser("~")
 
 def get_real_user():
     """Get the real user when running under sudo."""
-    sudo_user = os.environ.get('SUDO_USER')
-    if sudo_user:
-        return sudo_user
-    return os.environ.get('USER', os.getlogin())
+    # Prefer SUDO_USER
+    su = os.environ.get('SUDO_USER')
+    if su:
+        return su
+    for envname in ('USER', 'LOGNAME'):
+        v = os.environ.get(envname)
+        if v:
+            return v
+    try:
+        return pwd.getpwuid(os.geteuid()).pw_name
+    except Exception:
+        try:
+            return getpass.getuser()
+        except Exception:
+            return 'root'
 
 def get_real_home():
     """Get the home directory of the real user."""
-    real_user = get_real_user()
+    user = get_real_user()
     try:
-        return pwd.getpwnam(real_user).pw_dir
-    except KeyError:
-        return HOME
+        return pwd.getpwnam(user).pw_dir
+    except Exception:
+        return os.path.expanduser('~')
 
 def resolve_printer_config_dir():
     """
@@ -95,7 +107,7 @@ def resolve_printer_config_dir():
 # Determine config directory and data file location
 PRINTER_CONFIG_DIR = resolve_printer_config_dir()
 if PRINTER_CONFIG_DIR:
-    DATA_FILE = os.path.join(PRINTER_CONFIG_DIR, "tool_changes.json")
+    DATA_FILE = os.path.join(PRINTER_CONFIG_DIR, os.environ.get('TOOL_CHANGES_JSON', 'tool_changes.json'))
     GCODE_DIR = os.path.join(os.path.dirname(os.path.dirname(PRINTER_CONFIG_DIR)), "gcodes")
 else:
     # Fallback to old behavior
