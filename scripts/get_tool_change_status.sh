@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # get_tool_change_status.sh - Read and display tool change progress from JSON data
 #
 # This script reads tool change tracking data and displays the current status.
