@@ -509,15 +509,12 @@ main() {
             # Use selected existing directory
             TARGET_ROOT="${candidates[$((selection - 1))]}"
             
-            # Check if TARGET_ROOT already ends with printer_data or contains printer_data/config
+            # Check if TARGET_ROOT already ends with printer_data
             if [[ "$TARGET_ROOT" == */printer_data ]]; then
                 # Directory already ends with printer_data, just append /config
                 PRINTER_CONFIG_DIR="$TARGET_ROOT/config"
-            elif [ -d "$TARGET_ROOT/printer_data/config" ] || [ -d "$TARGET_ROOT/printer_data" ]; then
-                # Directory contains printer_data subdirectory
-                PRINTER_CONFIG_DIR="$TARGET_ROOT/printer_data/config"
             else
-                # Custom printer directory (e.g., /home/cody/printer1)
+                # Directory is the printer root (custom name or home), append printer_data/config
                 PRINTER_CONFIG_DIR="$TARGET_ROOT/printer_data/config"
             fi
             info "Selected printer: $TARGET_ROOT"
