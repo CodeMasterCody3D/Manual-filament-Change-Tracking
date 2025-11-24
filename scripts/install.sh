@@ -115,8 +115,10 @@ detect_printer_dirs() {
         done < <(find "$target_home" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null || true)
     fi
     
-    # Return unique candidates
-    printf '%s\n' "${candidates[@]}" | sort -u
+    # Return unique candidates (only if array is not empty)
+    if [ ${#candidates[@]} -gt 0 ]; then
+        printf '%s\n' "${candidates[@]}" | sort -u
+    fi
 }
 
 # Usage information
@@ -218,8 +220,8 @@ select_printer_dir() {
     echo "" >&2
     
     if [ ${#candidates[@]} -eq 0 ]; then
-        info "No existing printer directories detected in $target_home"
-        info "Will create new printer_data directory under $target_home"
+        echo "[INFO] No existing printer directories detected in $target_home" >&2
+        echo "[INFO] Will create new printer_data directory under $target_home" >&2
         echo "0) Create new printer_data under $target_home" >&2
         echo "" >&2
         
