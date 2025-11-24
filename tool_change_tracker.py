@@ -6,12 +6,102 @@ import sys
 import argparse
 import logging
 import tempfile
+import pwd
 from math import sqrt
 
 # Configuration
 HOME = os.path.expanduser("~")
-GCODE_DIR = os.path.join(HOME, "printer_data/gcodes")
-DATA_FILE = "/tmp/tool_change_data.json"
+
+def get_real_user():
+    """Get the real user when running under sudo."""
+    sudo_user = os.environ.get('SUDO_USER')
+    if sudo_user:
+        return sudo_user
+    return os.environ.get('USER', os.getlogin())
+
+def get_real_home():
+    """Get the home directory of the real user."""
+    real_user = get_real_user()
+    try:
+        return pwd.getpwnam(real_user).pw_dir
+    except KeyError:
+        return HOME
+
+def resolve_printer_config_dir():
+    """
+    Resolve PRINTER_CONFIG_DIR with fallback logic.
+    
+    Priority:
+    1. PRINTER_CONFIG_DIR environment variable
+    2. Read from .toolchange-config file
+    3. Auto-scan for printer directories
+    
+    Returns the resolved config directory or None.
+    """
+    # Priority 1: Environment variable
+    config_dir = os.environ.get('PRINTER_CONFIG_DIR')
+    if config_dir and os.path.isdir(config_dir):
+        return config_dir
+    
+    # Priority 2: Check for .toolchange-config in common locations
+    search_dirs = [
+        config_dir if config_dir else None,
+        '.',
+        os.path.join(get_real_home(), 'printer_data', 'config'),
+        os.path.join(get_real_home(), '.config', 'toolchange'),
+    ]
+    
+    for search_dir in search_dirs:
+        if not search_dir:
+            continue
+        config_file = os.path.join(search_dir, '.toolchange-config')
+        if os.path.isfile(config_file):
+            try:
+                with open(config_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith('PRINTER_CONFIG_DIR='):
+                            value = line.split('=', 1)[1].strip('"\'')
+                            if os.path.isdir(value):
+                                return value
+            except Exception as e:
+                logging.debug(f"Error reading {config_file}: {e}")
+    
+    # Priority 3: Auto-scan home directory
+    real_home = get_real_home()
+    candidates = []
+    
+    # Check if home itself has printer_data/config
+    home_config = os.path.join(real_home, 'printer_data', 'config')
+    if os.path.isdir(home_config):
+        candidates.append(home_config)
+    
+    # Find directories starting with "printer"
+    try:
+        for entry in os.scandir(real_home):
+            if entry.is_dir() and entry.name.startswith('printer'):
+                config_path = os.path.join(entry.path, 'printer_data', 'config')
+                if os.path.isdir(config_path):
+                    candidates.append(config_path)
+    except PermissionError:
+        pass
+    
+    # Return first candidate
+    if candidates:
+        return candidates[0]
+    
+    return None
+
+# Determine config directory and data file location
+PRINTER_CONFIG_DIR = resolve_printer_config_dir()
+if PRINTER_CONFIG_DIR:
+    DATA_FILE = os.path.join(PRINTER_CONFIG_DIR, "tool_changes.json")
+    GCODE_DIR = os.path.join(os.path.dirname(os.path.dirname(PRINTER_CONFIG_DIR)), "gcodes")
+else:
+    # Fallback to old behavior
+    PRINTER_CONFIG_DIR = os.path.join(HOME, "printer_data", "config")
+    DATA_FILE = "/tmp/tool_change_data.json"
+    GCODE_DIR = os.path.join(HOME, "printer_data/gcodes")
 
 # Setup logging
 logging.basicConfig(
@@ -86,6 +176,7 @@ def safe_write_json(filepath, data):
     Safely write JSON data to a file using atomic write.
     
     Writes to a temporary file first, then renames to avoid corruption.
+    Sets proper ownership when running under sudo.
     """
     try:
         # Validate data structure before writing
@@ -114,6 +205,16 @@ def safe_write_json(filepath, data):
             # Atomic rename
             os.replace(temp_path, filepath)
             logging.debug(f"Successfully wrote JSON to {filepath}")
+            
+            # Set ownership if running as sudo
+            sudo_user = os.environ.get('SUDO_USER')
+            if sudo_user:
+                try:
+                    import pwd
+                    pw_record = pwd.getpwnam(sudo_user)
+                    os.chown(filepath, pw_record.pw_uid, pw_record.pw_gid)
+                except Exception as e:
+                    logging.warning(f"Could not set ownership: {e}")
             
         except Exception:
             # Clean up temp file on error
