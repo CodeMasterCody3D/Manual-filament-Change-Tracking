@@ -463,6 +463,8 @@ main() {
             PRINTER_CONFIG_DIR="$TARGET_ROOT"
         elif [[ "$TARGET_ROOT" == */printer_data ]]; then
             PRINTER_CONFIG_DIR="$TARGET_ROOT/config"
+        elif [ -d "$TARGET_ROOT/printer_data/config" ]; then
+            PRINTER_CONFIG_DIR="$TARGET_ROOT/printer_data/config"
         else
             PRINTER_CONFIG_DIR="$TARGET_ROOT/config"
         fi
