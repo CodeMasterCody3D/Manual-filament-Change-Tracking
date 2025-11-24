@@ -62,25 +62,28 @@ The easiest way to install is using the provided installer:
 ```
 
 This will:
-- Prompt you for the installation directory (default: `/usr/local/bin`)
+- Detect existing printer configurations or create a new one
+- Install executables to `PRINTER_CONFIG_DIR/bin`
+- Create configuration file in `PRINTER_CONFIG_DIR`
 - Check permissions and advise if sudo is needed
-- Install all required scripts with correct permissions
 - Display next steps
 
 For non-interactive installation:
 
 ```sh
-./scripts/install.sh --yes --install-dir /usr/local/bin
+./scripts/install.sh --yes
 ```
 
 **Option B: Manual Installation**
 
-Copy the following scripts to your home directory (e.g., `/home/$USER/`):
+If you prefer manual installation, copy the scripts to your printer's bin directory:
 
 ```sh
-cp tool_change_tracker.py update_tool_change.py ~/
-cp scripts/get_tool_change_status.sh ~/
-chmod +x ~/get_tool_change_status.sh ~/tool_change_tracker.py ~/update_tool_change.py
+# Replace with your actual printer config path
+PRINTER_CONFIG_DIR="$HOME/printer_data/config"
+mkdir -p "$PRINTER_CONFIG_DIR/bin"
+cp scripts/get_tool_change_status.sh tool_change_tracker.py update_tool_change.py "$PRINTER_CONFIG_DIR/bin/"
+chmod +x "$PRINTER_CONFIG_DIR/bin/"*
 ```
 
 ### 5. Verify Installation
@@ -124,16 +127,16 @@ The main tracking script with improved JSON handling and CLI options:
 
 ```sh
 # Scan the latest G-code file
-tool_change_tracker.py scan
+$PRINTER_CONFIG_DIR/bin/tool_change_tracker.py scan
 
 # Scan a specific file
-tool_change_tracker.py scan /path/to/file.gcode
+$PRINTER_CONFIG_DIR/bin/tool_change_tracker.py scan /path/to/file.gcode
 
 # Dry run (preview without writing)
-tool_change_tracker.py --dry-run scan
+$PRINTER_CONFIG_DIR/bin/tool_change_tracker.py --dry-run scan
 
 # Verbose output for debugging
-tool_change_tracker.py --verbose scan
+$PRINTER_CONFIG_DIR/bin/tool_change_tracker.py --verbose scan
 ```
 
 ### Get Tool Change Status
@@ -142,13 +145,13 @@ Check the current tool change status:
 
 ```sh
 # Human-readable output
-get_tool_change_status.sh
+$PRINTER_CONFIG_DIR/bin/get_tool_change_status.sh
 
 # Machine-readable JSON output
-get_tool_change_status.sh --json
+$PRINTER_CONFIG_DIR/bin/get_tool_change_status.sh --json
 
-# Use custom install directory
-get_tool_change_status.sh --install-dir /usr/local/bin
+# With custom PRINTER_CONFIG_DIR
+PRINTER_CONFIG_DIR=/path/to/config $PRINTER_CONFIG_DIR/bin/get_tool_change_status.sh
 ```
 
 Example JSON output:
@@ -187,51 +190,46 @@ This example shows how to:
 
 ### Shell commands not working
 **Solution:** 
-- Verify paths in shell_command definitions match your installation
-- Check that scripts have execute permissions: `ls -l ~/tool_change_tracker.py`
+- Verify paths in shell_command definitions point to PRINTER_CONFIG_DIR/bin
+- Check that scripts have execute permissions: `ls -l $PRINTER_CONFIG_DIR/bin/`
 - Run `./scripts/verify_install.sh` to check installation
 
 ### Tracking not updating
 **Solution:** 
 - Verify `update_tool_change.py` has execute permissions
-- Check that `/tmp/tool_change_data.json` exists and is readable
-- Run the tracker in verbose mode: `tool_change_tracker.py --verbose scan`
+- Check that `PRINTER_CONFIG_DIR/tool_changes.json` exists and is readable
+- Run the tracker in verbose mode: `$PRINTER_CONFIG_DIR/bin/tool_change_tracker.py --verbose scan`
 
 ### JSON file corruption
 **Solution:**
 - The new version uses atomic writes to prevent corruption
-- If file is corrupted, delete `/tmp/tool_change_data.json` and re-scan
+- If file is corrupted, delete `PRINTER_CONFIG_DIR/tool_changes.json` and re-scan
 - Run with `--dry-run` first to test before writing
 
 ### Installation directory not in PATH
 **Solution:**
-Add to your `~/.bashrc` or `~/.profile`:
+Scripts are installed to `PRINTER_CONFIG_DIR/bin`. You can optionally add this to your PATH:
 ```sh
-export PATH="/usr/local/bin:$PATH"
+# Add to your ~/.bashrc or ~/.profile
+export PATH="$HOME/printer_data/config/bin:$PATH"
 ```
 Then reload: `source ~/.bashrc`
 
+Alternatively, use the full path when calling scripts or set PRINTER_CONFIG_DIR environment variable.
+
 ## Advanced Usage
 
-### Custom Install Location
+### Custom Config Location
 
-Override the default install location:
-
-```sh
-# Using environment variable
-INSTALL_DIR=/opt/klipper/bin get_tool_change_status.sh
-
-# Using command-line flag
-get_tool_change_status.sh --install-dir /opt/klipper/bin
-```
-
-### Custom JSON File Location
-
-Override the default JSON file location:
+Override the config directory location:
 
 ```sh
 # Using environment variable
-JSON_FILE=/home/pi/toolchange.json get_tool_change_status.sh
+export PRINTER_CONFIG_DIR=/path/to/printer/config
+$PRINTER_CONFIG_DIR/bin/get_tool_change_status.sh
+
+# Or inline
+PRINTER_CONFIG_DIR=/path/to/printer/config get_tool_change_status.sh
 ```
 
 ## Why This Is Useful

@@ -4,7 +4,7 @@
 # This script validates that all required components are properly installed
 # and have correct permissions.
 
-set -u
+set -euo pipefail
 
 # Color output helpers
 if [ -t 1 ]; then
@@ -27,12 +27,12 @@ info() {
 }
 
 warn() {
-    echo -e "${YELLOW}[WARN]${NC} $*"
+    echo -e "${YELLOW}[WARN]${NC} $*" >&2
     WARNINGS=$((WARNINGS + 1))
 }
 
 error() {
-    echo -e "${RED}[FAIL]${NC} $*"
+    echo -e "${RED}[FAIL]${NC} $*" >&2
     ERRORS=$((ERRORS + 1))
 }
 
@@ -119,6 +119,70 @@ main() {
     check_command "jq" "jq JSON processor"
     echo ""
     
+    echo "Checking for PRINTER_CONFIG_DIR installations..."
+    
+    # Check for .toolchange-config in common locations
+    local found_config=false
+    local config_dirs=()
+    
+    # Scan home directory for printer_data/config directories
+    if [ -d "$HOME/printer_data/config" ]; then
+        if [ -f "$HOME/printer_data/config/.toolchange-config" ]; then
+            config_dirs+=("$HOME/printer_data/config")
+            found_config=true
+        fi
+    fi
+    
+    # Find printer* directories
+    for dir in "$HOME"/printer*; do
+        if [ -d "$dir/printer_data/config" ]; then
+            if [ -f "$dir/printer_data/config/.toolchange-config" ]; then
+                config_dirs+=("$dir/printer_data/config")
+                found_config=true
+            fi
+        fi
+    done
+    
+    if [ "$found_config" = true ]; then
+        for config_dir in "${config_dirs[@]}"; do
+            info "Found printer config: $config_dir"
+            
+            # Check for per-printer files
+            if [ -f "$config_dir/get_tool_change_status.sh" ]; then
+                check_file "$config_dir/get_tool_change_status.sh" "get_tool_change_status.sh (per-printer)"
+            fi
+            
+            if [ -f "$config_dir/tool_change_tracker.py" ]; then
+                check_file "$config_dir/tool_change_tracker.py" "tool_change_tracker.py (per-printer)"
+            fi
+            
+            if [ -f "$config_dir/update_tool_change.py" ]; then
+                check_file "$config_dir/update_tool_change.py" "update_tool_change.py (per-printer)"
+            fi
+        done
+    else
+        warn "No per-printer installations found"
+        echo ""
+    fi
+    
+    echo ""
+    echo "Checking for wrapper scripts..."
+    
+    local found_wrappers=false
+    if [ -d "$HOME/.local/bin" ]; then
+        for wrapper in "$HOME/.local/bin"/get_tool_change_status-* "$HOME/.local/bin"/tool_change_tracker-*; do
+            if [ -f "$wrapper" ]; then
+                check_file "$wrapper" "Wrapper: $(basename "$wrapper")"
+                found_wrappers=true
+            fi
+        done
+    fi
+    
+    if [ "$found_wrappers" = false ]; then
+        warn "No wrapper scripts found in ~/.local/bin"
+    fi
+    
+    echo ""
     echo "Checking installed scripts..."
     
     # Try to find scripts in common locations
@@ -138,7 +202,7 @@ main() {
     done
     
     if [ "$found_tracker" = false ]; then
-        error "tool_change_tracker.py not found in common locations"
+        warn "tool_change_tracker.py not found in common locations"
     fi
     
     for dir in ./scripts "$HOME" "$HOME/.local/bin" "/usr/local/bin" "$HOME/bin"; do
@@ -153,7 +217,7 @@ main() {
     done
     
     if [ "$found_status" = false ]; then
-        error "get_tool_change_status.sh not found in common locations"
+        warn "get_tool_change_status.sh not found in common locations"
     fi
     
     for dir in . "$HOME" "$HOME/.local/bin" "/usr/local/bin" "$HOME/bin"; do
