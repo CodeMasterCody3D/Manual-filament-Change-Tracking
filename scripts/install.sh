@@ -115,8 +115,11 @@ detect_printer_dirs() {
         done < <(find "$target_home" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null || true)
     fi
     
-    # Return unique candidates
-    printf '%s\n' "${candidates[@]}" | sort -u
+    # Return unique candidates (only if array is not empty)
+    if [ ${#candidates[@]} -gt 0 ]; then
+        printf '%s\n' "${candidates[@]}" | sort -u
+    fi
+    return 0
 }
 
 # Usage information
@@ -218,8 +221,8 @@ select_printer_dir() {
     echo "" >&2
     
     if [ ${#candidates[@]} -eq 0 ]; then
-        info "No existing printer directories detected in $target_home"
-        info "Will create new printer_data directory under $target_home"
+        echo "[INFO] No existing printer directories detected in $target_home" >&2
+        echo "[INFO] Will create new printer_data directory under $target_home" >&2
         echo "0) Create new printer_data under $target_home" >&2
         echo "" >&2
         
@@ -399,20 +402,34 @@ EOF
     info "Created: $config_file"
 }
 
-# Install per-printer files to PRINTER_CONFIG_DIR
+# Install per-printer files to PRINTER_CONFIG_DIR/bin
 install_per_printer_files() {
     local config_dir="$1"
+    local bin_dir="$config_dir/bin"
     local real_user
     real_user=$(get_real_user)
     
-    info "Installing per-printer files to: $config_dir"
+    # Create bin directory
+    if [ ! -d "$bin_dir" ]; then
+        info "Creating bin directory: $bin_dir"
+        if ! mkdir -p "$bin_dir"; then
+            error "Failed to create $bin_dir"
+            return 1
+        fi
+        # Set ownership if running as sudo
+        if [ -n "${SUDO_USER:-}" ]; then
+            chown "$real_user:$real_user" "$bin_dir"
+        fi
+    fi
+    
+    info "Installing per-printer executables to: $bin_dir"
     echo ""
     
     for file in "${PER_PRINTER_FILES[@]}"; do
         local src_path="$REPO_ROOT/$file"
         local filename
         filename="$(basename "$file")"
-        local dest_path="$config_dir/$filename"
+        local dest_path="$bin_dir/$filename"
         
         if [ ! -f "$src_path" ]; then
             error "Source file not found: $src_path"
@@ -420,7 +437,7 @@ install_per_printer_files() {
         fi
         
         # Always overwrite if --yes or user confirmed
-        if [ "$NONINTERACTIVE" = true ] || confirm "Install $filename to $config_dir?" "y"; then
+        if [ "$NONINTERACTIVE" = true ] || confirm "Install $filename to $bin_dir?" "y"; then
             if cp "$src_path" "$dest_path"; then
                 info "  $src_path -> $dest_path"
                 chmod +x "$dest_path"
@@ -438,53 +455,6 @@ install_per_printer_files() {
     done
     
     echo ""
-}
-
-# Create wrapper scripts for per-printer tools
-create_wrapper_scripts() {
-    local config_dir="$1"
-    local wrapper_dir="$2"
-    local printer_name="$3"
-    local real_user
-    real_user=$(get_real_user)
-    
-    # Ensure wrapper directory exists
-    if [ ! -d "$wrapper_dir" ]; then
-        mkdir -p "$wrapper_dir"
-        if [ -n "${SUDO_USER:-}" ]; then
-            chown "$real_user:$real_user" "$wrapper_dir"
-        fi
-    fi
-    
-    info "Creating wrapper scripts in: $wrapper_dir"
-    
-    # Create get_tool_change_status wrapper
-    local status_wrapper="$wrapper_dir/get_tool_change_status-$printer_name"
-    cat > "$status_wrapper" <<EOF
-#!/bin/bash
-# Wrapper script for $printer_name
-export PRINTER_CONFIG_DIR="$config_dir"
-exec "$config_dir/get_tool_change_status.sh" "\$@"
-EOF
-    chmod +x "$status_wrapper"
-    if [ -n "${SUDO_USER:-}" ]; then
-        chown "$real_user:$real_user" "$status_wrapper"
-    fi
-    info "Created: $status_wrapper"
-    
-    # Create tool_change_tracker wrapper
-    local tracker_wrapper="$wrapper_dir/tool_change_tracker-$printer_name"
-    cat > "$tracker_wrapper" <<EOF
-#!/bin/bash
-# Wrapper script for $printer_name
-export PRINTER_CONFIG_DIR="$config_dir"
-exec "$config_dir/tool_change_tracker.py" "\$@"
-EOF
-    chmod +x "$tracker_wrapper"
-    if [ -n "${SUDO_USER:-}" ]; then
-        chown "$real_user:$real_user" "$tracker_wrapper"
-    fi
-    info "Created: $tracker_wrapper"
 }
 
 # Main installation logic
@@ -569,7 +539,7 @@ main() {
     fi
     
     # Show what will be installed
-    info "Per-printer files to be installed in $PRINTER_CONFIG_DIR:"
+    info "Per-printer executables to be installed in $PRINTER_CONFIG_DIR/bin:"
     for file in "${PER_PRINTER_FILES[@]}"; do
         echo "    - $(basename "$file")"
     done
@@ -591,38 +561,6 @@ main() {
     # Create .toolchange-config
     create_toolchange_config "$PRINTER_CONFIG_DIR" "tool_changes.json"
     echo ""
-    
-    # Ask about wrapper scripts
-    local install_wrappers=false
-    local wrapper_dir="$real_home/.local/bin"
-    
-    if [ "$NONINTERACTIVE" = false ]; then
-        if confirm "Install wrapper scripts to ~/.local/bin for easier access?" "y"; then
-            install_wrappers=true
-        fi
-    else
-        install_wrappers=true
-    fi
-    
-    if [ "$install_wrappers" = true ]; then
-        # Extract printer name from TARGET_ROOT
-        local printer_name
-        printer_name=$(basename "$TARGET_ROOT")
-        if [ "$printer_name" = "$(basename "$real_home")" ]; then
-            printer_name="default"
-        fi
-        
-        create_wrapper_scripts "$PRINTER_CONFIG_DIR" "$wrapper_dir" "$printer_name"
-        echo ""
-        
-        # Check if wrapper_dir is in PATH
-        if [[ ":$PATH:" != *":$wrapper_dir:"* ]]; then
-            warn "Note: $wrapper_dir is not in your PATH"
-            info "Add this to your ~/.bashrc:"
-            info "  export PATH=\"$wrapper_dir:\$PATH\""
-            echo ""
-        fi
-    fi
     
     # Install to additional directory if specified
     if [ -n "$INSTALL_DIR" ]; then
@@ -657,15 +595,8 @@ main() {
     echo "========================================="
     echo ""
     echo "Printer config directory: $PRINTER_CONFIG_DIR"
+    echo "Executables directory: $PRINTER_CONFIG_DIR/bin"
     echo "Configuration file: $PRINTER_CONFIG_DIR/.toolchange-config"
-    if [ "$install_wrappers" = true ]; then
-        echo "Wrapper scripts: $wrapper_dir"
-        local printer_name
-        printer_name=$(basename "$TARGET_ROOT")
-        [ "$printer_name" = "$(basename "$real_home")" ] && printer_name="default"
-        echo "  - get_tool_change_status-$printer_name"
-        echo "  - tool_change_tracker-$printer_name"
-    fi
     echo ""
     echo "========================================="
     echo "Next Steps:"
@@ -678,11 +609,7 @@ main() {
     echo "   PRE_SCAN_TOOL_CHANGES macro"
     echo ""
     echo "3. Test the installation by running a tool change scan:"
-    if [ "$install_wrappers" = true ]; then
-        echo "   tool_change_tracker-$printer_name scan /path/to/file.gcode"
-    else
-        echo "   $PRINTER_CONFIG_DIR/tool_change_tracker.py scan /path/to/file.gcode"
-    fi
+    echo "   $PRINTER_CONFIG_DIR/bin/tool_change_tracker.py scan /path/to/file.gcode"
     echo ""
     echo "For more information, see README.md"
     echo ""
