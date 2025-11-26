@@ -4,127 +4,12 @@ import re
 import json
 import sys
 import argparse
-import logging
-import tempfile
 from math import sqrt
 
 # Configuration
 HOME = os.path.expanduser("~")
 GCODE_DIR = os.path.join(HOME, "printer_data/gcodes")
 DATA_FILE = "/tmp/tool_change_data.json"
-
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(levelname)s: %(message)s'
-)
-
-def safe_read_json(filepath):
-    """
-    Safely read JSON data from a file.
-    
-    Returns a dictionary with the structure:
-    {
-        "total_changes": int,
-        "current_change": int,
-        "changes": [
-            {
-                "tool_number": int,
-                "color": str,
-                "brand": str,
-                "material": str,
-                "full_name": str,
-                "line": int
-            },
-            ...
-        ]
-    }
-    
-    Returns default empty structure if file doesn't exist or is invalid.
-    """
-    default_data = {"total_changes": 0, "current_change": 0, "changes": []}
-    
-    if not os.path.exists(filepath):
-        logging.debug(f"JSON file not found: {filepath}, using default")
-        return default_data
-    
-    try:
-        with open(filepath, 'r') as f:
-            data = json.load(f)
-        
-        # Validate structure
-        if not isinstance(data, dict):
-            logging.warning(f"Invalid JSON structure in {filepath}, using default")
-            return default_data
-        
-        # Ensure required keys exist
-        if "total_changes" not in data or "current_change" not in data or "changes" not in data:
-            logging.warning(f"Missing required keys in {filepath}, using default")
-            return default_data
-        
-        # Type validation
-        if not isinstance(data["total_changes"], int) or not isinstance(data["current_change"], int):
-            logging.warning(f"Invalid types in {filepath}, using default")
-            return default_data
-        
-        if not isinstance(data["changes"], list):
-            logging.warning(f"Invalid changes list in {filepath}, using default")
-            return default_data
-        
-        return data
-        
-    except json.JSONDecodeError as e:
-        logging.error(f"JSON parse error in {filepath}: {e}")
-        return default_data
-    except Exception as e:
-        logging.error(f"Error reading {filepath}: {e}")
-        return default_data
-
-
-def safe_write_json(filepath, data):
-    """
-    Safely write JSON data to a file using atomic write.
-    
-    Writes to a temporary file first, then renames to avoid corruption.
-    """
-    try:
-        # Validate data structure before writing
-        if not isinstance(data, dict):
-            raise ValueError("Data must be a dictionary")
-        
-        required_keys = ["total_changes", "current_change", "changes"]
-        for key in required_keys:
-            if key not in data:
-                raise ValueError(f"Missing required key: {key}")
-        
-        # Create temp file in the same directory as target
-        dir_name = os.path.dirname(filepath)
-        if not dir_name:
-            dir_name = "."
-        
-        # Ensure directory exists
-        os.makedirs(dir_name, exist_ok=True)
-        
-        # Write to temporary file
-        fd, temp_path = tempfile.mkstemp(dir=dir_name, prefix='.tmp_', suffix='.json')
-        try:
-            with os.fdopen(fd, 'w') as f:
-                json.dump(data, f, indent=2)
-            
-            # Atomic rename
-            os.replace(temp_path, filepath)
-            logging.debug(f"Successfully wrote JSON to {filepath}")
-            
-        except Exception:
-            # Clean up temp file on error
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
-            raise
-            
-    except Exception as e:
-        logging.error(f"Error writing JSON to {filepath}: {e}")
-        raise
-
 
 # Embedded CSS Named Colors
 CSS_NAMED_COLORS = {
@@ -164,17 +49,16 @@ def find_latest_gcode():
     try:
         files = [f for f in os.listdir(GCODE_DIR) if f.endswith(".gcode")]
         if not files:
-            logging.error("No G-code files found in %s", GCODE_DIR)
-            return None
+            print("ERROR: No G-code files found.")
+            sys.exit(1)
         latest_file = max(files, key=lambda f: os.path.getmtime(os.path.join(GCODE_DIR, f)))
         return os.path.join(GCODE_DIR, latest_file)
     except Exception as e:
-        logging.error("Could not find G-code file: %s", e)
-        return None
+        print(f"ERROR: Could not find G-code file: {e}")
+        sys.exit(1)
 
 # Function to find the closest CSS color
 def closest_css_color(hex_color):
-    """Find the closest CSS named color to the given hex color."""
     try:
         r1, g1, b1 = [int(hex_color[i:i+2], 16) for i in (1, 3, 5)]
         closest_color = None
@@ -190,16 +74,11 @@ def closest_css_color(hex_color):
 
         return closest_color or "Unknown"
     except Exception as e:
-        logging.warning("Color conversion error: %s", e)
+        print(f"WARNING: Color conversion error: {e}")
         return "Unknown"
 
 # Function to extract filament information from G-code
 def extract_filament_info(gcode_file):
-    """
-    Extract filament color and type information from G-code file.
-    
-    Returns a list of dictionaries with filament information for each tool.
-    """
     filament_info = []
     colors = []
     types = []
@@ -247,7 +126,7 @@ def extract_filament_info(gcode_file):
             })
             
     except Exception as e:
-        logging.warning("Failed to extract filament information: %s", e)
+        print(f"WARNING: Failed to extract filament information: {e}")
     
     # Fallback to default values if none found
     if not filament_info:
@@ -263,43 +142,26 @@ def extract_filament_info(gcode_file):
     
     return filament_info
 
-def pre_scan_gcode(gcode_path=None, dry_run=False, verbose=False):
-    """
-    Scan specified G-code file or find latest.
-    
-    Args:
-        gcode_path: Path to G-code file, or None to find latest
-        dry_run: If True, don't write output file
-        verbose: If True, enable verbose logging
-    
-    Returns:
-        0 on success, non-zero on error
-    """
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-    
+def pre_scan_gcode(gcode_path=None):
+    """Scan specified G-code file or find latest"""
     try:
         gcode_file = gcode_path or find_latest_gcode()
         
-        if not gcode_file:
-            logging.error("No G-code file found")
-            return 1
-        
         # Validate file exists
         if not os.path.exists(gcode_file):
-            logging.error("File not found: %s", gcode_file)
-            return 1
+            print(f"ERROR: File not found: {gcode_file}")
+            sys.exit(1)
         if not gcode_file.endswith(".gcode"):
-            logging.error("Not a G-code file: %s", gcode_file)
-            return 1
+            print(f"ERROR: Not a G-code file: {gcode_file}")
+            sys.exit(1)
             
-        logging.info("Scanning G-code file: %s", gcode_file)
+        print(f"Scanning G-code file: {gcode_file}")
         
         # Extract filament information from the file
         filament_info = extract_filament_info(gcode_file)
-        logging.info("Detected filaments:")
+        print(f"Detected filaments:")
         for i, info in enumerate(filament_info):
-            logging.info("  Tool %d: %s (%s %s)", i, info['color_name'], info['brand'], info['material'])
+            print(f"  Tool {i}: {info['color_name']} ({info['brand']} {info['material']})")
         
         data = {"total_changes": 0, "current_change": 0, "changes": []}
         
@@ -330,36 +192,21 @@ def pre_scan_gcode(gcode_path=None, dry_run=False, verbose=False):
                         "line": line_number
                     })
         
-        if dry_run:
-            logging.info("DRY RUN: Would write to %s", DATA_FILE)
-            logging.debug("Data: %s", json.dumps(data, indent=2))
-        else:
-            safe_write_json(DATA_FILE, data)
-            logging.info("Data saved to: %s", DATA_FILE)
+        with open(DATA_FILE, "w") as f:
+            json.dump(data, f, indent=2)
             
-        logging.info("PRE_SCAN_COMPLETE: %d tool changes found.", data['total_changes'])
-        return 0
+        print(f"PRE_SCAN_COMPLETE: {data['total_changes']} tool changes found.")
+        print(f"Data saved to: {DATA_FILE}")
         
     except Exception as e:
-        logging.error("Failed to process file: %s", e)
-        return 1
+        print(f"ERROR: Failed to process file: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Tool Change Tracker - Scan G-code files for manual tool changes",
-        prog="tool_change_tracker.py"
+        prog="tooltracker.py"
     )
-    parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Preview changes without writing output file'
-    )
-    parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='Enable verbose logging'
-    )
-    
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
     # Scan command
@@ -374,8 +221,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.command == 'scan':
-        exit_code = pre_scan_gcode(args.file, dry_run=args.dry_run, verbose=args.verbose)
-        sys.exit(exit_code)
+        pre_scan_gcode(args.file)
     else:
         parser.print_help()
         sys.exit(1)
