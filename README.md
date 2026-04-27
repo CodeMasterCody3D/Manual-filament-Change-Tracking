@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="Manual Filament Change Tracking Logo" width="420">
+  <img src="logo1.png" alt="Manual Filament Change Tracking Logo" width="420">
 </p>
 
 ## A Better M600 – Automatic Filament Tracking for Multi-Color Prints!
