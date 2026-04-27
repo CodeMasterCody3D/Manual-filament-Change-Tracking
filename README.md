@@ -83,6 +83,13 @@ cd Manual-filament-Change-Tracking
 
 3. Replace Hardcoded Username
 
+If you don't know your username run this in the terminal.
+
+```sh
+whoami
+```
+
+
 This repository uses cody as a placeholder. Run the provided script to replace all occurrences of cody with your username--(HINT:VERY COMMONLY THE USERNAME IS ( pi ) IF YOUR RUNNING ON A RASPBERRY PI):
 
 ```sh
