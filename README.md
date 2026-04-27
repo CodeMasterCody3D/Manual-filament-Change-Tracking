@@ -9,7 +9,7 @@ Tired of manually tracking your filament changes? This improved M600 macro for K
 How It Works
 
 Filament Change Logging:
-Uses a combination of Python and Bash scripts to log each filament change automatically.
+Uses a combination of Python and Bash scripts to log each filament change automatically, so you can seamlessly print multicolor prints without having to keep track of which color comes next.
 
 OrcaSlicer Integration:
 Works seamlessly with OrcaSlicer
@@ -42,7 +42,6 @@ Install jq
 sudo apt-get install jq
 ```
 
-##You will need to fix your z offset after installing because it places the shell command activation under the z offset. Just move it above the z offset section. 
 
 
 2. Download the Repository
@@ -85,14 +84,17 @@ chmod +x ~/get_tool_change_status.sh ~/tool_change_tracker.py ~/update_tool_chan
 
 5. Update Your printer.cfg using add_to_printer.cfg
 
-Copy and paste the provided macros and shell command definitions into your printer.cfg, replacing the resume and pause with the ones I provided in add_to_printer.cfg
+Copy and paste the provided macros that are inside add_to_printer.cfg and shell command definitions into your printer.cfg, replacing the resume and pause with the ones I provided in add_to_printer.cfg
+
+(alternatively, you can just add it to the dynamic macros section.
+
+###What it should look like.
+```sh
+dynamicmacros]
+configs: dynamic.cfg, dynamic_prompt.cfg, add_to_printer.cfg
+```
 
 Insert them above the auto-generated section (look for the marker #*# <---------------------- SAVE_CONFIG in your printer.cfg).
-
-
-Macros: PAUSE, RESUME, M600, GET_PRINT_FILENAME, PRE_SCAN_TOOL_CHANGES, SAVE_PRINT_FILE, SHOW_TOOL_CHANGE_STATUS
-
-Shell Commands: update_tool_change, pre_scan_tool_changes, track_tool_change, get_tool_change_status
 
 
 
