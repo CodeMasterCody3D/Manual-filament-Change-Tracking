@@ -2,11 +2,11 @@
   <img src="logo.png" alt="Manual Filament Change Tracking Logo" width="420">
 </p>
 
-A Better M600 – Automatic Filament Tracking for Multi-Color Prints!
+## A Better M600 – Automatic Filament Tracking for Multi-Color Prints!
 
 Tired of manually tracking your filament changes? This improved M600 macro for Klipper not only pauses for color swaps but also keeps track of your filament changes automatically! Easily swap colors mid-print without losing track of what comes next.
 
-How It Works
+## How It Works
 
 Filament Change Logging:
 Uses a combination of Python and Bash scripts to log each filament change automatically, so you can seamlessly print multicolor prints without having to keep track of which color comes next.
@@ -18,7 +18,7 @@ Automatic Tool Color Updates:
 Automatically updates tool colors, so you can focus on printing rather than manual adjustments. Just use the color palette on Orca Slicer and select the color for your filament, Orca Slicer uses Hex data to keep track of the color, the script will use that hex data using CSS color library with 147 colors!
 
 
-Installation Instructions
+## Installation Instructions
 
 1. Prerequisites
 
@@ -90,19 +90,23 @@ chmod +x ~/get_tool_change_status.sh ~/tool_change_tracker.py ~/update_tool_chan
 
 Copy and paste the provided macros that are inside add_to_printer.cfg and shell command definitions into your printer.cfg, replacing the resume and pause with the ones I provided in add_to_printer.cfg
 
-(alternatively, you can just add it to the dynamic macros section.)
 
-#What it should look like with alternative method.
+Insert them above the auto-generated section that gets created when setting z offset(look for the marker #*# <---------------------- SAVE_CONFIG in your printer.cfg). It's at the bottom just make sure all of the macros are above it.
 
-you should comment out your current resume and and pause macro and any m600 macros you have.
+
+(alternatively, you can just add it to the dynamic macros section in your printer.cfg.)
+
+## What it should look like with alternative method for macro installation.
+
+you should comment out your current resume, pause and any m600 macros you have.
+
+
+## Dynamicmacros
 
 ```sh
 [dynamicmacros]
 configs: dynamic.cfg, dynamic_prompt.cfg, add_to_printer.cfg
 ```
-
-Insert them above the auto-generated section that gets created when setting z offset(look for the marker #*# <---------------------- SAVE_CONFIG in your printer.cfg). 
-
 
 
 6. Set Up OrcaSlicer
