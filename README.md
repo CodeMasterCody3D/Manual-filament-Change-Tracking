@@ -25,9 +25,7 @@ Automatically updates tool colors, so you can focus on printing rather than memo
 Klipper Firmware:
 Ensure Klipper is installed. (obviously)
 
-Make sure to install the Gcode Shell Command extension using KIAUH installer.
 
-[Click here to open KIAUH](https://github.com/dw-0/kiauh)
 
 Install Dynamic Macros
 ```sh
@@ -37,8 +35,34 @@ cd DynamicMacros
 sh install.sh
 sudo service klipper restart
 ```
-KIAUH (Klipper Installation And Update Helper):
+
+Add to your moonraker.conf:
+
+moonraker.conf
+```sh
+# DynamicMacros Update Manager
+[update_manager DynamicMacros]
+type: git_repo
+path: ~/DynamicMacros
+origin: https://github.com/3DCoded/DynamicMacros.git
+primary_branch: main
+is_system_service: False
+install_script: install.sh
+```
+
+First, update via Moonraker's update manager. Then run in your terminal:
+
+```sh
+cd ~/DynamicMacros
+sh install.sh
+sudo service klipper restart
+```
+
+## KIAUH 
+(Klipper Installation And Update Helper):
 Install the Shell Command Add-on via KIAUH if it's not already installed.
+
+[Click here to open KIAUH](https://github.com/dw-0/kiauh)
 
 Install jq
 
