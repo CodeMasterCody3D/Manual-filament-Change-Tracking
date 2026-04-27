@@ -25,6 +25,10 @@ Installation Instructions
 Klipper Firmware:
 Ensure Klipper is installed.
 
+Make sure to install the Gcode Shell Command extension using KIAUH installer.
+
+[Click here to open KIAUH](https://github.com/dw-0/kiauh)
+
 Install Dynamic Macros
 ```sh
 cd ~
@@ -86,15 +90,18 @@ chmod +x ~/get_tool_change_status.sh ~/tool_change_tracker.py ~/update_tool_chan
 
 Copy and paste the provided macros that are inside add_to_printer.cfg and shell command definitions into your printer.cfg, replacing the resume and pause with the ones I provided in add_to_printer.cfg
 
-(alternatively, you can just add it to the dynamic macros section.
+(alternatively, you can just add it to the dynamic macros section.)
 
-###What it should look like.
+#What it should look like with alternative method.
+
+you should comment out your current resume and and pause macro and any m600 macros you have.
+
 ```sh
-dynamicmacros]
+[dynamicmacros]
 configs: dynamic.cfg, dynamic_prompt.cfg, add_to_printer.cfg
 ```
 
-Insert them above the auto-generated section (look for the marker #*# <---------------------- SAVE_CONFIG in your printer.cfg).
+Insert them above the auto-generated section that gets created when setting z offset(look for the marker #*# <---------------------- SAVE_CONFIG in your printer.cfg). 
 
 
 
