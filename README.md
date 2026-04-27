@@ -70,12 +70,13 @@ Copy the following scripts to your home directory (e.g., /home/$USER/):
 get_tool_change_status.sh
 tool_change_tracker.py
 update_tool_change.py
+generate_filament_prompt_macro.py
 
-For example:
+Copy the files with this command:
 
 ```sh
-cp get_tool_change_status.sh tool_change_tracker.py update_tool_change.py ~/
-chmod +x ~/get_tool_change_status.sh ~/tool_change_tracker.py ~/update_tool_change.py
+cp get_tool_change_status.sh tool_change_tracker.py update_tool_change.py generate_filament_prompt_macro.py ~/
+chmod +x ~/get_tool_change_status.sh ~/tool_change_tracker.py ~/update_tool_change.py generate_filament_prompt_macro.py
 ```
 
 5. Update Your printer.cfg using add_to_printer.cfg
