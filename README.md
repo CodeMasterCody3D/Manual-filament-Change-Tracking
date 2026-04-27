@@ -21,6 +21,14 @@ Installation Instructions
 Klipper Firmware:
 Ensure Klipper is installed.
 
+Install Dynamic Macros
+```sh
+cd ~
+git clone https://github.com/3DCoded/DynamicMacros
+cd DynamicMacros
+sh install.sh
+sudo service klipper restart
+```
 KIAUH (Klipper Installation And Update Helper):
 Install the Shell Command Add-on via KIAUH if it's not already installed.
 
