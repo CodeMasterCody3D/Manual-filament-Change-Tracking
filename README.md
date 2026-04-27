@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="Manual Filament Change Tracking Logo" width="420">
+</p>
+
 A Better M600 – Automatic Filament Tracking for Multi-Color Prints!
 
 Tired of manually tracking your filament changes? This improved M600 macro for Klipper not only pauses for color swaps but also keeps track of your filament changes automatically! Easily swap colors mid-print without losing track of what comes next.
