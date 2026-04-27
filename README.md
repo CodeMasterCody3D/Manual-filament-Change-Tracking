@@ -4,7 +4,7 @@
 
 ## A Better M600 – Automatic Filament Tracking for Multi-Color Prints!
 
-Tired of manually tracking your filament changes? This improved M600 macro for Klipper not only pauses for color swaps but also keeps track of your filament changes automatically! Easily swap colors mid-print without losing track of what comes next.
+Tired of manually tracking your filament changes? This improved M600 macro for Klipper not only pauses for color swaps but also keeps track of your filament changes and provides a prompt with which color to switch too. Easily swap colors mid-print without losing track of what comes next!
 
 ## How It Works
 
@@ -15,7 +15,7 @@ OrcaSlicer Integration:
 Works seamlessly with OrcaSlicer
 
 Automatic Tool Color Updates:
-Automatically updates tool colors, so you can focus on printing rather than manual adjustments. Just use the color palette on Orca Slicer and select the color for your filament, Orca Slicer uses Hex data to keep track of the color, the script will use that hex data using CSS color library with 147 colors!
+Automatically updates tool colors, so you can focus on printing rather than memorizing or writing down the color change order. Just use the color palette on Orca Slicer and select the color for your filament. (Must be done to know the exact color you will be switching too!!) Orca Slicer uses Hex data placed in the gcode to keep track of the color, the script will use that hex data to use CSS color library to match between 147 colors!
 
 
 ## Installation Instructions
@@ -23,7 +23,7 @@ Automatically updates tool colors, so you can focus on printing rather than manu
 1. Prerequisites
 
 Klipper Firmware:
-Ensure Klipper is installed.
+Ensure Klipper is installed. (obviously)
 
 Make sure to install the Gcode Shell Command extension using KIAUH installer.
 
